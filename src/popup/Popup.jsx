@@ -226,7 +226,7 @@ export default function Popup() {
                           checked={!!selected["m:" + m.id]}
                           onChange={(e) => setSelected({ ...selected, ["m:" + m.id]: e.target.checked })}
                         />
-                        <span className="flex-1 truncate">{m.title}</span>
+                        <span className="flex-1 min-w-0 break-words">{m.title}</span>
                         <span className="text-xs text-slate-400 shrink-0">{m.fromFolder || "root"}</span>
                       </li>
                     ))}
@@ -240,17 +240,19 @@ export default function Popup() {
             <>
               <p className="text-xs font-semibold text-slate-400 mt-2 mb-1">Renames</p>
               <ul>
-                {diff.renames.map((r) => (
-                  <li key={r.id} className="flex items-center gap-2 py-1 text-sm">
+{diff.renames.map((r) => (
+                  <li key={r.id} className="flex items-start gap-2 py-1 text-sm">
                     <input
+                      className="mt-0.5"
                       type="checkbox"
                       checked={!!selected["r:" + r.id]}
                       onChange={(e) => setSelected({ ...selected, ["r:" + r.id]: e.target.checked })}
                     />
-                    <span className="flex-1 truncate">
-                      <span className="text-slate-500 line-through decoration-slate-300">{r.from}</span>
-                      <span className="mx-1 text-slate-400">→</span>
-                      <b>{r.to}</b>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-slate-500 line-through decoration-slate-300 break-words">{r.from}</span>
+                      <span className="block">
+                        <b className="break-words">{r.to}</b>
+                      </span>
                     </span>
                   </li>
                 ))}
