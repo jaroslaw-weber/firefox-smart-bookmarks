@@ -8,10 +8,24 @@ export default function Popup() {
   const [status, setStatus] = useState(null); // {text, error}
   const [diff, setDiff] = useState(null);
   const [categories, setCategories] = useState(null);
+  const [batchIds, setBatchIds] = useState(null);
+  const [cleanup, setCleanup] = useState(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState({});
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(null);
+  const [includeCleaned, setIncludeCleaned] = useState(false);
+  const [elapsed, setElapsed] = useState(null);
+  const [chars, setChars] = useState(null);
+  const [reasoning, setReasoning] = useState(null);
+
+  useEffect(() => {
+    if (!loading) return;
+    const start = Date.now();
+    setElapsed(0);
+    const iv = setInterval(() => setElapsed(Math.round((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, [loading]);
 
   useEffect(() => {
     (async () => {
@@ -19,24 +33,49 @@ export default function Popup() {
       setHasKey(!!opts.options.apiKey);
       const read = await send({ type: "READ" });
       if (!read.ok) setStatus({ text: read.error, error: true });
-      else setTree(read.tree);
+      else { setTree(read.tree); setCleanup(read.tree.cleanup); }
     })();
   }, []);
+
+  const refreshCleanup = async () => {
+    const read = await send({ type: "READ" });
+    if (read.ok) { setTree(read.tree); setCleanup(read.tree.cleanup); }
+  };
 
   const analyze = async () => {
     setLoading(true);
     setDiff(null);
     setApplied(null);
     setStatus(null);
+    setChars(0);
+    let port = null;
     try {
-      const res = await send({ type: "RECOMMEND" });
-      if (!res.ok) { setStatus({ text: res.error, error: true }); return; }
-      setCategories(res.categories);
-      setDiff(res.diff);
+      port = browser.runtime.connect({ name: "recommend" });
+      const result = await new Promise((resolve, reject) => {
+        port.onMessage.addListener((res) => {
+          if (res.kind === "progress") { setChars(res.chars); setReasoning(res.reasoning); }
+          else if (res.kind === "result" && res.ok) resolve(res);
+          else if (res.kind === "result") reject(new Error(res.error));
+          else if (!res.ok) reject(new Error(res.error || "Failed to analyze."));
+        });
+        port.onDisconnect.addListener(() => {
+          if (!port.error && loading) {
+            setStatus({ text: "Connection closed before analysis finished — the tab may have reconnected. Click Analyze again.", error: true });
+          }
+        });
+        port.postMessage({ type: "RECOMMEND_STREAM", includeCleaned });
+      });
+      port.disconnect();
+      setCategories(result.categories);
+      setDiff(result.diff);
+      setBatchIds(result.batchIds);
+      setCleanup(result.stats);
       const sel = {};
-      res.diff.moves.forEach((m) => (sel["m:" + m.id] = true));
-      res.diff.renames.forEach((r) => (sel["r:" + r.id] = true));
+      result.diff.moves.forEach((m) => (sel["m:" + m.id] = true));
+      result.diff.renames.forEach((r) => (sel["r:" + r.id] = true));
       setSelected(sel);
+    } catch (err) {
+      setStatus({ text: err.message || String(err), error: true });
     } finally {
       setLoading(false);
     }
@@ -51,25 +90,40 @@ export default function Popup() {
       moves: keep(diff.moves || [], "m:"),
       renames: keep(diff.renames || [], "r:")
     };
-    const res = await send({ type: "APPLY", diff: d });
+    const res = await send({ type: "APPLY", diff: d, cleanedIds: batchIds });
     setApplying(false);
     if (!res.ok) { setStatus({ text: res.error, error: true }); return; }
     setApplied(res.summary);
+    setBatchIds(null);
+    refreshCleanup();
   };
 
   const groups = {};
   (diff ? diff.moves : []).forEach((m) => ((groups[m.toFolder] = groups[m.toFolder] || []), groups[m.toFolder].push(m)));
 
+  const openInTab = (e) => {
+    e.preventDefault();
+    browser.tabs.create({ url: browser.runtime.getURL("src/workspace/index.html") });
+  };
+
   return (
-    <div className="w-80 p-4 font-sans text-slate-800">
+    <div className="w-full max-w-xl mx-auto p-4 font-sans text-slate-800">
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-base font-bold">Smart Bookmarks</h1>
-        <a
-          href="#"
-          onClick={(e) => { e.preventDefault(); browser.runtime.openOptionsPage(); }}
-          className="text-slate-400 hover:text-slate-600 text-lg leading-none"
-          title="Options"
-        >&#9881;</a>
+        <div className="flex items-center gap-1">
+          <a
+            href="#"
+            onClick={openInTab}
+            className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            title="Open in a tab (won't close when you click away)"
+          >&#8693;</a>
+          <a
+            href="#"
+            onClick={(e) => { e.preventDefault(); browser.runtime.openOptionsPage(); }}
+            className="text-slate-400 hover:text-slate-600 text-lg leading-none"
+            title="Options"
+          >&#9881;</a>
+        </div>
       </header>
 
       {!hasKey && (
@@ -83,13 +137,54 @@ export default function Popup() {
       {tree && (
         <div className="mb-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
           <p className="text-slate-600">{tree.folders.length} folders, {tree.bookmarks.length} bookmarks</p>
+          {cleanup && (
+            <p className="text-xs text-slate-400 mt-1">
+              {cleanup.cleaned} cleaned · {cleanup.neverCleaned} untouched
+            </p>
+          )}
+          <label className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+            <input
+              type="checkbox"
+              checked={includeCleaned}
+              onChange={(e) => setIncludeCleaned(e.target.checked)}
+            />
+            Include already-cleaned bookmarks
+          </label>
           <button
             onClick={analyze}
             disabled={loading || !hasKey}
             className="mt-2 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading ? "Analyzing…" : "Analyze with AI"}
+            {loading ? `Analyzing… ${elapsed ?? 0}s` : cleanup && cleanup.next ? `Analyze next ${cleanup.next}…` : "Analyze with AI"}
           </button>
+          {loading && (
+            <div className="mt-2">
+              <div className="flex justify-between text-xs text-slate-400">
+                <span>
+                  {(reasoning != null && reasoning > 0 && chars == 0) ? "Model is thinking…" : "Waiting for the AI provider…"}
+                </span>
+                <span>
+                  {chars != null && chars > 0 ? `${chars} chars` : reasoning != null && reasoning > 0 ? `${reasoning} reasoning` : `${elapsed ?? 0}s`}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 w-full overflow-hidden rounded bg-slate-100">
+                <div
+                  className="h-full bg-blue-500 transition-all"
+                  style={{
+                    width: chars != null && chars > 0 ? `${Math.min(100, 20 + (chars % 80))}%` : `${Math.min(100, (elapsed ?? 0) * 2)}%`,
+                  }}
+                />
+              </div>
+              {elapsed >= 120 && (
+                <p className="mt-1 text-xs text-red-600">Timed out in background (120s). Close and reopen to retry.</p>
+              )}
+            </div>
+          )}
+          {cleanup && !includeCleaned && cleanup.neverCleaned > 0 && cleanup.cleaned > 0 && cleanup.next < cleanup.neverCleaned && (
+            <p className="mt-2 text-xs text-amber-600">
+              Leftover batch: this run only covers the next {cleanup.next}. Run again after applying to clean the rest.
+            </p>
+          )}
         </div>
       )}
 
@@ -152,7 +247,11 @@ export default function Popup() {
                       checked={!!selected["r:" + r.id]}
                       onChange={(e) => setSelected({ ...selected, ["r:" + r.id]: e.target.checked })}
                     />
-                    <span className="flex-1 truncate">→ <b>{r.to}</b></span>
+                    <span className="flex-1 truncate">
+                      <span className="text-slate-500 line-through decoration-slate-300">{r.from}</span>
+                      <span className="mx-1 text-slate-400">→</span>
+                      <b>{r.to}</b>
+                    </span>
                   </li>
                 ))}
               </ul>

@@ -12,6 +12,9 @@ export default function Options() {
   const [rules, setRules] = useState(null);
   const [saved, setSaved] = useState("");
   const [saveError, setSaveError] = useState("");
+  const [batchSize, setBatchSize] = useState(20);
+  const [resetStatus, setResetStatus] = useState("");
+  const [disableReasoning, setDisableReasoning] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -21,8 +24,17 @@ export default function Options() {
       setModel(res.options.model);
       setApiKey(res.options.apiKey);
       setRules(res.options.rules);
+      setBatchSize(res.options.batchSize || 20);
+      setDisableReasoning(!!res.options.disableReasoning);
     })();
   }, []);
+
+  const resetMemory = async () => {
+    setResetStatus("");
+    const res = await send({ type: "RESET_CLEANUP" });
+    setResetStatus(res.ok ? "Cleanup memory cleared — will re-check all bookmarks." : res.error || "Failed.");
+    setTimeout(() => setResetStatus(""), 4000);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -32,6 +44,8 @@ export default function Options() {
         endpoint: endpoint.trim(),
         model: model.trim(),
         apiKey: apiKey.trim(),
+        batchSize,
+        disableReasoning,
         rules
       }
     });
@@ -159,6 +173,47 @@ export default function Options() {
               />
             </label>
           )}
+
+          <label className="flex flex-col gap-1.5 text-sm font-semibold">
+            Bookmarks per run
+            <input
+              type="number"
+              min="1"
+              max="200"
+              value={batchSize}
+              onChange={(e) => setBatchSize(Number(e.target.value))}
+              className="rounded-md border border-slate-300 px-3 py-2 font-normal"
+            />
+            <span className="text-xs font-normal text-slate-400">
+              Analyzed per click. Cleaned ones are remembered and skipped next run.
+            </span>
+          </label>
+
+          <label className="flex items-center justify-between gap-3 text-sm font-semibold">
+            <span>
+              Disable model reasoning
+              <span className="block text-xs font-normal text-slate-400">Skip the "thinking" phase for faster answers (if the model supports it)</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={disableReasoning}
+              onChange={(e) => setDisableReasoning(e.target.checked)}
+              className="h-4 w-4"
+            />
+          </label>
+
+          <div className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-3">
+            <div>
+              <p className="text-sm font-semibold">Cleanup memory</p>
+              <p className="text-xs font-normal text-slate-400">Forget which bookmarks were cleaned; re-check everything from scratch.</p>
+            </div>
+            <button
+              type="button"
+              onClick={resetMemory}
+              className="shrink-0 rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+            >Reset</button>
+          </div>
+          {resetStatus && <p className="text-xs text-slate-500">{resetStatus}</p>}
 
           {rules?.preset !== "custom" && (
             <label className="flex flex-col gap-1.5 text-sm font-semibold">

@@ -11,6 +11,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, "src/popup/index.html"),
+        workspace: resolve(__dirname, "src/workspace/index.html"),
         options: resolve(__dirname, "src/options/index.html"),
         background: resolve(__dirname, "src/background.js")
       },

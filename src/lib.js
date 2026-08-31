@@ -43,6 +43,8 @@ export const DEFAULT_OPTIONS = {
   endpoint: "https://openrouter.ai/api/v1/chat/completions",
   model: "auto",
   apiKey: "",
+  batchSize: 20,
+  disableReasoning: false,
   rules: {
     preset: "balanced",
     rename: true,
@@ -50,6 +52,13 @@ export const DEFAULT_OPTIONS = {
     customInstructions: ""
   }
 };
+
+const AI_TIMEOUT_MS = 120000;
+const REASONING_PATTERNS = [
+  ["reasoning", (d) => d.reasoning],
+  ["reasoning_content", (d) => d.reasoning_content],
+  ["reasoning_details", (d) => (d.reasoning_details || []).map((x) => x.text || "").join("")]
+];
 
 const ROOT_FILTER_IDS = ["root________", "menu________", "toolbar_____", "unfiled_____", "mobile______"];
 
@@ -84,10 +93,37 @@ export function buildTreeSummary(tree) {
   return { folders, bookmarks };
 }
 
-export function buildPrompt(bookmarks, rules) {
+export function cleanupStats(bookmarks, memory) {
+  let cleaned = 0;
+  for (const b of bookmarks) if (memory && memory[b.id]) cleaned++;
+  return { total: bookmarks.length, cleaned, neverCleaned: bookmarks.length - cleaned };
+}
+
+export function selectBatch(bookmarks, memory, batchSize, includeCleaned = false) {
+  const size = Math.max(1, Number(batchSize) || 20);
+  const scored = bookmarks.map((b) => {
+    const last = (memory && memory[b.id]) || 0;
+    return { b, depth: b.path.length, last, never: !last || includeCleaned };
+  });
+  scored.sort((x, y) => {
+    if (x.never !== y.never) return x.never ? -1 : 1;
+    if (x.depth !== y.depth) return x.depth - y.depth;
+    if (x.last !== y.last) return x.last - y.last;
+    return x.b.id.localeCompare(y.b.id);
+  });
+  const batch = scored.slice(0, size).map((s) => s.b);
+  const stats = cleanupStats(bookmarks, memory);
+  stats.next = Math.min(includeCleaned ? stats.total : stats.neverCleaned, batch.length);
+  stats.batchSize = size;
+  return { batch, stats };
+}
+
+export function buildPrompt(bookmarks, rules, folders = []) {
   const r = { ...DEFAULT_OPTIONS.rules, ...(rules || {}) };
   const preset = ORGANIZE_PRESETS[r.preset] || ORGANIZE_PRESETS.balanced;
   const maxCats = Number(r.maxCategories) || 8;
+
+  const knownFolders = [...new Set(folders.map((f) => f.path.join(" > ")).filter(Boolean))];
 
   const promptRules = [
     "- 'category' must be one of 'categories'.",
@@ -137,6 +173,9 @@ export function buildPrompt(bookmarks, rules) {
     '}',
     "Rules:",
     ...promptRules,
+    ...(knownFolders.length
+      ? ["", "Existing folders you already have (reuse these when a category matches — do not create a duplicate):", ...knownFolders]
+      : []),
     "",
     "Bookmarks:",
     ...lines
@@ -152,45 +191,125 @@ export function parseSuggestions(text) {
   return json;
 }
 
-export async function askAI(bookmarks) {
+export async function askAIStream(bookmarks, rules, folders, onProgress) {
   const options = await getOptions();
   if (!options.apiKey) {
     throw new Error("No API key configured. Open the extension options and add your OpenRouter key.");
   }
-  const response = await fetch(options.endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${options.apiKey}` },
-    body: JSON.stringify({
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS);
+  try {
+    const body = {
       model: options.model,
-      messages: [{ role: "user", content: buildPrompt(bookmarks, options.rules) }]
-    })
-  });
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`AI request failed (${response.status}): ${detail.slice(0, 300)}`);
+      messages: [{ role: "user", content: buildPrompt(bookmarks, rules || options.rules, folders) }],
+      stream: true
+    };
+    if (options.disableReasoning) {
+      body.reasoning = { effort: "none", exclude: true };
+    }
+    const response = await fetch(options.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${options.apiKey}` },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      throw new Error(`AI request failed (${response.status}): ${detail.slice(0, 300)}`);
+    }
+    return await readStream(response.body, onProgress || (() => {}));
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`Timed out after ${AI_TIMEOUT_MS / 1000}s waiting for the AI response. The model may be loaded/slow or reasoning. Try a smaller model in Options.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  const data = await response.json();
-  const content = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+}
+
+async function readStream(body, onProgress) {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let reasoningLen = 0;
+  const report = () => onProgress(content.length, reasoningLen);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    // Split on double newline; tolerate \r\n, \n, \r
+    const parts = buffer.split(/\r?\n\r?\n/);
+    buffer = parts.pop();
+    for (const part of parts) {
+      const lines = part.split(/\r?\n/);
+      let data = "";
+      for (const line of lines) {
+        if (line.startsWith("data:")) data += line.slice(5);
+        else if (line.length === 0) continue;
+      }
+      if (data.trim() === "[DONE]") {
+        try { reader.cancel(); } catch (e) { /* already closed */ }
+        if (!content) throw new Error("AI returned an empty response.");
+        return parseSuggestions(content);
+      }
+      if (!data.trim()) continue;
+      try {
+        const json = JSON.parse(data);
+        const delta =
+          (json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content) ||
+          (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content);
+        if (delta) content += delta;
+        const choice = json.choices && json.choices[0];
+        const d = (choice && (choice.delta || choice.message)) || {};
+        const reasonText = d.reasoning || d.reasoning_content || "";
+        if (typeof reasonText === "string" && reasonText.length) reasoningLen += reasonText.length;
+        report();
+      } catch (e) {
+        // ignore malformed chunk
+      }
+    }
+  }
   if (!content) throw new Error("AI returned an empty response.");
   return parseSuggestions(content);
 }
 
-export function buildDiff(bookmarks, suggestions) {
+export function buildDiff(bookmarks, suggestions, folders = []) {
   const categories = suggestions.categories || [];
-  const remapped = {};
-  const existingFolders = new Set(bookmarks.map((b) => b.path[0]).filter(Boolean));
-  const createFolders = categories.filter((c) => !existingFolders.has(c)).map((c) => ({ name: c }));
+  const folderNames = folders.map((f) => f.title).filter(Boolean).map((s) => s.trim());
+  const byLower = new Map();
+  for (const n of folderNames) byLower.set(n.toLowerCase(), n);
+
+  const remap = {};
+  for (const c of categories) {
+    const key = (c || "").trim().toLowerCase();
+    remap[c] = byLower.get(key) || c;
+  }
+
+  const createFolders = [];
+  const createdKeys = new Set();
+  for (const c of categories) {
+    const name = remap[c];
+    if (!name || byLower.has(name.toLowerCase())) continue;
+    const key = name.toLowerCase();
+    if (createdKeys.has(key)) continue;
+    createdKeys.add(key);
+    createFolders.push({ name });
+  }
+
   const moves = [];
   const renames = [];
   for (const a of suggestions.assignments || []) {
     const bm = bookmarks[a.index];
     if (!bm) continue;
-    const currentRoot = bm.path[0] || undefined;
-    if (a.category && a.category !== currentRoot) {
-      moves.push({ id: bm.id, title: bm.title, fromFolder: currentRoot, toFolder: a.category });
+    const currentRoot = bm.path[0] || "";
+    const target = (remap[a.category] || "").trim();
+    if (target && target !== currentRoot) {
+      moves.push({ id: bm.id, title: bm.title, fromFolder: currentRoot || undefined, toFolder: target });
     }
     if (a.newTitle && a.newTitle !== bm.title) {
-      renames.push({ id: bm.id, to: a.newTitle });
+      renames.push({ id: bm.id, from: bm.title, to: a.newTitle });
     }
   }
   return { createFolders, moves, renames };
