@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Firefox Smart Bookmarks",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reads your native Firefox bookmarks and uses AI to suggest how to sort and categorize them.",
   "icons": {
     "48": "icon-48.png",
