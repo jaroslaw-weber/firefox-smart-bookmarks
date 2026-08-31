@@ -19,6 +19,24 @@ A Firefox extension that reads your native browser bookmarks and uses AI to sugg
 - Manual review step: you approve a diff of proposed changes before anything is written.
 - Non-destructive: it can preview changes and report a summary of what will be moved/renamed.
 
+## Screenshots
+
+Live progress while the AI analyzes a batch of bookmarks:
+
+![In progress](screenshots/in%20progress.png)
+
+Reviewing suggested moves, grouped by target folder:
+
+![Move to folders](screenshots/move%20to%20folders.png)
+
+Rename suggestions (old → new):
+
+![Rename](screenshots/rename.png)
+
+Configuring the provider, batch size, and cleanup settings:
+
+![Options](screenshots/options.png)
+
 ## Privacy
 
 - All bookmark reading/writing happens through the Firefox native `bookmarks` API.
