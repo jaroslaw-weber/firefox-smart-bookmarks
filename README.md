@@ -31,7 +31,25 @@ A Firefox extension that reads your native browser bookmarks and uses AI to sugg
 - Firefox (the WebExtensions API version that includes the `bookmarks` API).
 - An API key for your AI provider (e.g. [OpenRouter](https://openrouter.ai/)).
 
-## Installation (Development)
+## Installation
+
+### From releases (end user, no build required)
+
+1. Download the latest `.zip` from the [Releases](https://github.com/jaroslaw-weber/firefox-smart-bookmarks/releases) page and unzip it.
+2. Open Firefox → `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
+3. Select the `manifest.json` from the unzipped folder.
+4. Open the extension options, enter your API key, and click **Analyze**.
+
+**Note:** Temporary add-ons load fine from `about:debugging`, but are cleared when Firefox restarts. For a permanent install the add-on must be **signed** — see [Permanent install](#permanent-install).
+
+### Permanent install
+
+Firefox only runs signed add-ons permanently. To get a signed copy:
+
+- Submit the add-on for [self-distribution on addons.mozilla.org](https://extensionworkshop.com/documentation/publish/submitting-an-add-on-for-self-distribution/) — AMO signs it privately, no public listing required.
+- Alternatively, use a build that allows unsigned add-ons (e.g. [Developer Edition or ESR](https://extensionworkshop.com/documentation/publish/signing-and-distribution-overview/#permission-to-load-unsigned-add-ons)) and install the `.zip` directly.
+
+### From source (development)
 
 The UI is built with React + Tailwind via Vite, so you build first:
 
