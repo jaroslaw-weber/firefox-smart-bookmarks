@@ -94,6 +94,10 @@ gh release upload v<version> "$env:TEMP\firefox_smart_bookmarks-<version>.zip" -
 
   Keeping the `gecko.id` is also recommended (AMO warns when it's missing and will require it later).
 - **Backslash zip paths fail AMO validation.** Use the step 3 script, not `Compress-Archive`.
+- **Add-on names cannot contain Mozilla/Firefox trademarks.** Validation fails with
+  "Add-on names cannot contain the Mozilla or Firefox trademarks." Keep the `name` neutral
+  (e.g. *Very Smart Bookmarks*); "Fox" passes the automated check but still implies Firefox and
+  is risky under human review.
 - **Keep versions in sync** across `package.json`, `public/manifest.json`, and the git tag.
 - Temporary add-ons loaded via `about:debugging` are cleared on Firefox restart; only signed
   builds install permanently.
