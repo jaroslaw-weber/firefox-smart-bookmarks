@@ -77,6 +77,22 @@ gh release upload v<version> "$env:TEMP\firefox_smart_bookmarks-<version>.zip" -
 
 ## Gotchas
 
+- **`data_collection_permissions` is required** for all new AMO submissions. It lives under
+  `browser_specific_settings.gecko` in `manifest.json`. This extension transmits bookmark data
+  to the configured AI provider, so it declares `bookmarksInfo`:
+
+  ```json
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox-smart-bookmarks@jaroslaw-weber.github.io",
+      "data_collection_permissions": {
+        "required": ["bookmarksInfo"]
+      }
+    }
+  }
+  ```
+
+  Keeping the `gecko.id` is also recommended (AMO warns when it's missing and will require it later).
 - **Backslash zip paths fail AMO validation.** Use the step 3 script, not `Compress-Archive`.
 - **Keep versions in sync** across `package.json`, `public/manifest.json`, and the git tag.
 - Temporary add-ons loaded via `about:debugging` are cleared on Firefox restart; only signed
