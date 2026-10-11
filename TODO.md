@@ -1,4 +1,4 @@
-# Firefox Smart Bookmarks — Implementation Plan
+# Very Smart Bookmarks — Implementation Plan
 
 ## Goal
 A Firefox extension that reads native bookmarks, uses AI to suggest categories/sorting, and applies an approved reorganization.

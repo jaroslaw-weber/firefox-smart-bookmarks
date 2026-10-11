@@ -1,4 +1,4 @@
-# Firefox Smart Bookmarks
+# Very Smart Bookmarks
 
 A Firefox extension that reads your native browser bookmarks and uses AI to suggest how to sort and categorize them, so you can keep a nicely organized bookmark collection with minimal effort.
 

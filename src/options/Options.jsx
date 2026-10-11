@@ -63,7 +63,7 @@ export default function Options() {
 
   return (
     <div className="flex flex-col items-center px-10 py-10 font-sans text-slate-800">
-      <h1 className="mb-5 text-xl font-bold">Smart Bookmarks — Options</h1>
+      <h1 className="mb-5 text-xl font-bold">Very Smart Bookmarks — Options</h1>
       <form onSubmit={submit} className="flex w-full max-w-lg flex-col gap-5 rounded-xl border border-slate-200 bg-white p-6">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-semibold">AI provider</p>

@@ -109,7 +109,7 @@ export default function Popup() {
   return (
     <div className="w-full max-w-xl mx-auto p-4 font-sans text-slate-800">
       <header className="flex items-center justify-between mb-3">
-        <h1 className="text-base font-bold">Smart Bookmarks</h1>
+        <h1 className="text-base font-bold">Very Smart Bookmarks</h1>
         <div className="flex items-center gap-1">
           <a
             href="#"
