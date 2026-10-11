@@ -32,7 +32,7 @@ This bundles into `dist/` (popup, options, workspace, background, manifest, icon
 
 ```powershell
 $src = (Resolve-Path "dist").Path
-$zip = "$env:TEMP\firefox_smart_bookmarks-<version>.zip"
+$zip = "$env:TEMP\very_smart_bookmarks-<version>.zip"
 if (Test-Path $zip) { Remove-Item -LiteralPath $zip }
 
 Add-Type -AssemblyName System.IO.Compression
@@ -57,21 +57,21 @@ Verify the entry names use `/` and that `manifest.json` is at the archive root.
 git tag v<version>
 git push origin v<version>
 
-gh release create v<version> "$env:TEMP\firefox_smart_bookmarks-<version>.zip" `
+gh release create v<version> "$env:TEMP\very_smart_bookmarks-<version>.zip" `
   --title "v<version>" --notes-file release-notes.md
 ```
 
 To replace an asset on an existing release:
 
 ```powershell
-gh release upload v<version> "$env:TEMP\firefox_smart_bookmarks-<version>.zip" --clobber
+gh release upload v<version> "$env:TEMP\very_smart_bookmarks-<version>.zip" --clobber
 ```
 
 ## 5. Submit to AMO
 
 1. Go to the [Developer Hub → Submit a New Add-on](https://addons.mozilla.org/developers/addon/submit/).
 2. Choose **On your own** (self-distribution) or list publicly.
-3. Upload the same `firefox_smart_bookmarks-<version>.zip` built in step 3.
+3. Upload the same `very_smart_bookmarks-<version>.zip` built in step 3.
 4. AMO runs automated validation — a backslash-path archive fails here (see step 3).
 5. Complete the listing fields, then submit for signing.
 

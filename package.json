@@ -1,5 +1,5 @@
 {
-  "name": "firefox-smart-bookmarks",
+  "name": "very-smart-bookmarks",
   "version": "0.1.0",
   "private": true,
   "description": "Firefox extension that uses AI to organize native bookmarks.",

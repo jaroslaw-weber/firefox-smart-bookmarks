@@ -53,7 +53,7 @@ Configuring the provider, batch size, and cleanup settings:
 
 ### From releases (end user, no build required)
 
-1. Download the latest `.zip` from the [Releases](https://github.com/jaroslaw-weber/firefox-smart-bookmarks/releases) page and unzip it.
+1. Download the latest `.zip` from the [Releases](https://github.com/jaroslaw-weber/very-smart-bookmarks/releases) page and unzip it.
 2. Open Firefox → `about:debugging` → **This Firefox** → **Load Temporary Add-on**.
 3. Select the `manifest.json` from the unzipped folder.
 4. Open the extension options, enter your API key, and click **Analyze**.
