@@ -11,6 +11,14 @@
     "bookmarks",
     "storage"
   ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox-smart-bookmarks@jaroslaw-weber.github.io",
+      "data_collection_permissions": {
+        "required": ["bookmarksInfo"]
+      }
+    }
+  },
   "browser_action": {
     "default_title": "Smart Bookmarks"
   },
